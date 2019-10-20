@@ -102,10 +102,11 @@ public class QuartzAnnotationBeanPostProcessor
                     builder.addPropertyValue("overwriteExistingJobs", true);
                     builder.addPropertyValue("applicationContextSchedulerContextKey", "applicationContext");
                     builder.addPropertyValue("configLocation", "classpath:quartz.properties");
-                    String beanName = "scheduledExecutorFactoryBean";
+                    String beanName = "schedulerFactoryBean";
                     defaultListableBeanFactory.registerBeanDefinition(beanName, builder.getBeanDefinition());
                     applicationContext.getBean(beanName, Scheduler.class).start();
                 }
+                triggers.clear();
             }
         } catch (Exception e) {
             log.info("加载调度器失败，" + e.getMessage(), e);
