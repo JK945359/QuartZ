@@ -6,8 +6,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.sql.DataSource;
-
 import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.Trigger;
@@ -104,7 +102,6 @@ public class QuartzAnnotationBeanPostProcessor
                     builder.addPropertyValue("triggers", triggers.toArray());
                     builder.addPropertyValue("overwriteExistingJobs", true);
                     builder.addPropertyValue("applicationContextSchedulerContextKey", "applicationContext");
-                    builder.addPropertyValue("dataSource", applicationContext.getBean("dataSource", DataSource.class));
                     builder.addPropertyValue("configLocation", "classpath:quartz.properties");
                     String beanName = "schedulerFactoryBean";
                     defaultListableBeanFactory.registerBeanDefinition(beanName, builder.getBeanDefinition());
