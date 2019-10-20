@@ -10,6 +10,7 @@ import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.Trigger;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
@@ -34,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class QuartzAnnotationBeanPostProcessor
-    implements BeanPostProcessor, ApplicationContextAware, ApplicationListener<ContextRefreshedEvent> {
+    implements BeanPostProcessor, ApplicationContextAware, ApplicationListener<ContextRefreshedEvent>, DisposableBean {
 
     // 触发器集合
     private List<Trigger> triggers = new ArrayList<Trigger>();
@@ -111,6 +112,12 @@ public class QuartzAnnotationBeanPostProcessor
         } catch (Exception e) {
             log.info("加载调度器失败，" + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void destroy() throws Exception {
+        // 为了防止QuartZ工作线程没有关闭，造成内存泄漏，暂时这样解决
+        Thread.sleep(10000);
     }
 
 }
