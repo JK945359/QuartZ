@@ -14,19 +14,4 @@ public class QuartZTask {
     public void run1() {
         System.out.println("run1:---" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
     }
-
-    @QuartzScheduled(cron = "0/5 * * * * ? ")
-    public void run2() {
-        System.out.println("run22222:---" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-    }
-
-    @QuartzScheduled(cron = "0/10 * * * * ? ")
-    public void run3() {
-        System.out.println("run333333333:---" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-    }
-
-    @QuartzScheduled(cron = "0/15 * * * * ? ")
-    public void run4() {
-        System.out.println("run4444444444444444:---" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-    }
 }
