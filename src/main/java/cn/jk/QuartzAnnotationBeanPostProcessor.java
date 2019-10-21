@@ -5,12 +5,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.Trigger;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
@@ -36,6 +38,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class QuartzAnnotationBeanPostProcessor
     implements BeanPostProcessor, ApplicationContextAware, ApplicationListener<ContextRefreshedEvent>, DisposableBean {
+
+    @Value("${quartz.jdbc.url}")
+    private String url;
+    @Value("${quartz.jdbc.username}")
+    private String username;
+    @Value("${quartz.jdbc.password}")
+    private String password;
 
     // 触发器集合
     private List<Trigger> triggers = new ArrayList<Trigger>();
@@ -103,9 +112,11 @@ public class QuartzAnnotationBeanPostProcessor
                     builder.addPropertyValue("overwriteExistingJobs", true);
                     builder.addPropertyValue("applicationContextSchedulerContextKey", "applicationContext");
                     builder.addPropertyValue("configLocation", "classpath:quartz.properties");
+                    // builder.addPropertyValue("quartzProperties", quartzProperties());
                     String beanName = "schedulerFactoryBean";
                     defaultListableBeanFactory.registerBeanDefinition(beanName, builder.getBeanDefinition());
-                    applicationContext.getBean(beanName, Scheduler.class).start();
+                    // applicationContext.getBean(beanName, Scheduler.class).start();
+                    applicationContext.getBean(beanName, Scheduler.class).startDelayed(10);// spring容器启动后10秒再启动Scheduler
                 }
                 triggers.clear();
             }
@@ -120,4 +131,35 @@ public class QuartzAnnotationBeanPostProcessor
         Thread.sleep(2000);
     }
 
+    private Properties quartzProperties() {
+        Properties prop = new Properties();
+        prop.put("org.quartz.scheduler.instanceName", "quartZTaskScheduler");
+        prop.put("org.quartz.scheduler.instanceId", "AUTO");
+        prop.put("org.quartz.scheduler.skipUpdateCheck", "true");
+
+        prop.put("org.quartz.jobStore.class", "org.quartz.impl.jdbcjobstore.JobStoreTX");
+        prop.put("org.quartz.jobStore.driverDelegateClass", "org.quartz.impl.jdbcjobstore.StdJDBCDelegate");
+        prop.put("org.quartz.jobStore.tablePrefix", "QRTZ_");
+        prop.put("org.quartz.jobStore.isClustered", "true");
+        prop.put("org.quartz.jobStore.dataSource", "quartZ");
+        prop.put("org.quartz.jobStore.maxMisfiresToHandleAtATime", "3");
+        prop.put("org.quartz.scheduler.skipUpdateCheck", "true");
+        prop.put("org.quartz.jobStore.clusterCheckinInterval", "2000");
+        prop.put("org.quartz.jobStore.misfireThreshold", "60000");
+
+        prop.put("org.quartz.threadPool.class", "org.quartz.simpl.SimpleThreadPool");
+        prop.put("org.quartz.threadPool.threadCount", "10");
+        prop.put("org.quartz.threadPool.threadPriority", "5");
+
+        prop.put("org.quartz.dataSource.quartZ.driver", "com.mysql.jdbc.Driver");
+        prop.put("org.quartz.dataSource.quartZ.URL", url);
+        prop.put("org.quartz.dataSource.quartZ.user", username);
+        prop.put("org.quartz.dataSource.quartZ.password", password);
+        prop.put("org.quartz.dataSource.quartZ.maxConnections", "20");
+        prop.put("org.quartz.dataSource.quartZ.validationQuery", "select 0");
+
+        prop.put("org.quartz.plugin.shutdownhook.class", "org.quartz.plugins.management.ShutdownHookPlugin");
+        prop.put("org.quartz.plugin.shutdownhook.cleanShutdown", "true");
+        return prop;
+    }
 }
