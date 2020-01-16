@@ -1,12 +1,8 @@
 package cn.jk;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-
+import cn.jk.annotation.QuartzScheduled;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.Trigger;
@@ -26,18 +22,17 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 import org.springframework.util.StringUtils;
 
-import cn.jk.annotation.QuartzScheduled;
-import lombok.extern.slf4j.Slf4j;
+import java.util.*;
 
 /**
  * 自定义注解初始化加载QuartZ定时任务
- * 
+ *
  * @author JK
  * @date 2019/10/18
  */
 @Slf4j
 public class QuartzAnnotationBeanPostProcessor
-    implements BeanPostProcessor, ApplicationContextAware, ApplicationListener<ContextRefreshedEvent>, DisposableBean {
+        implements BeanPostProcessor, ApplicationContextAware, ApplicationListener<ContextRefreshedEvent>, DisposableBean {
 
     @Value("${quartz.jdbc.url}")
     private String url;
@@ -46,6 +41,11 @@ public class QuartzAnnotationBeanPostProcessor
     @Value("${quartz.jdbc.password}")
     private String password;
 
+    /**
+     * 需要获取真实bean的类名
+     */
+    private List<String> beanNameList = Arrays.asList(QuartZTask.class.getName());
+
     // 触发器集合
     private List<Trigger> triggers = new ArrayList<Trigger>();
 
@@ -53,9 +53,10 @@ public class QuartzAnnotationBeanPostProcessor
 
     private DefaultListableBeanFactory defaultListableBeanFactory;
 
+    @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        this.applicationContext = (ConfigurableApplicationContext)applicationContext;
-        defaultListableBeanFactory = (DefaultListableBeanFactory)this.applicationContext.getBeanFactory();
+        this.applicationContext = (ConfigurableApplicationContext) applicationContext;
+        defaultListableBeanFactory = (DefaultListableBeanFactory) this.applicationContext.getBeanFactory();
     }
 
     // bean初始化方法调用前被调用
@@ -64,39 +65,49 @@ public class QuartzAnnotationBeanPostProcessor
         return bean;
     }
 
-    // bean初始化方法调用后被调用
+    // bean初始化方法调用后被调用,bean代表对象，beanName代表对象名，bean的id
+    @SneakyThrows
     @Override
     public Object postProcessAfterInitialization(final Object bean, final String beanName) throws BeansException {
-        Arrays.asList(bean.getClass().getDeclaredMethods()).stream()
-            .filter(m -> m.getAnnotation(QuartzScheduled.class) != null && m.getParameterCount() == 0).forEach(m -> {// 过滤没有@QuartzScheduled注解和有参数的方法
-                String mname = m.getName();
-                String beanMethodName = beanName + StringUtils.capitalize(mname);
-                String jobBeanName = beanMethodName + "JobDetail";
-                String triggerBeanName = beanMethodName + "Trigger";
+        //如果bean对象使用@Transactional注解，spring会代理bean对象，
+        // spring ioc容器中的bean是代理类，要获取自定义注解需要通道如下方式获取
+        Object target = bean;
+        //必须增加条件，不是所有的类都可以获取具体bean对象
+   /*     Advised advised = (Advised) bean;
+        SingletonTargetSource singletonTargetSource = (SingletonTargetSource) advised.getTargetSource();
+        target = singletonTargetSource.getTarget();*/
+        String simpleBeanName = bean.getClass().getSimpleName();
+        // 过滤没有@QuartzScheduled注解和有参数的方法
+        Arrays.asList(target.getClass().getDeclaredMethods()).stream()
+                .filter(m -> m.getAnnotation(QuartzScheduled.class) != null && m.getParameterCount() == 0).forEach(m -> {
+            String mname = m.getName();
+            String beanMethodName = simpleBeanName + StringUtils.capitalize(mname);
+            String jobBeanName = beanMethodName + "JobDetail";
+            String triggerBeanName = beanMethodName + "Trigger";
 
-                BeanDefinitionBuilder jobDetailBuilder =
+            BeanDefinitionBuilder jobDetailBuilder =
                     BeanDefinitionBuilder.genericBeanDefinition(JobDetailFactoryBean.class);
-                jobDetailBuilder.addPropertyValue("durability", true);
-                jobDetailBuilder.addPropertyValue("jobClass", QuartzTaskJobBean.class);
-                Map<String, String> jobDataAsMap = new HashMap<>();
-                jobDataAsMap.put("targetObject", beanName);
-                jobDataAsMap.put("targetMethod", mname);
-                jobDetailBuilder.addPropertyValue("jobDataAsMap", jobDataAsMap);
-                jobDetailBuilder.addPropertyValue("name", mname + "JobDetail");
-                jobDetailBuilder.addPropertyValue("group", StringUtils.capitalize(beanName) + "JobDetail");
-                defaultListableBeanFactory.registerBeanDefinition(jobBeanName, jobDetailBuilder.getBeanDefinition());
+            jobDetailBuilder.addPropertyValue("durability", true);
+            jobDetailBuilder.addPropertyValue("jobClass", QuartzTaskJobBean.class);
+            Map<String, String> jobDataAsMap = new HashMap<>();
+            jobDataAsMap.put("targetObject", beanName);
+            jobDataAsMap.put("targetMethod", mname);
+            jobDetailBuilder.addPropertyValue("jobDataAsMap", jobDataAsMap);
+            jobDetailBuilder.addPropertyValue("name", mname + "JobDetail");
+            jobDetailBuilder.addPropertyValue("group", StringUtils.capitalize(simpleBeanName) + "JobDetail");
+            defaultListableBeanFactory.registerBeanDefinition(jobBeanName, jobDetailBuilder.getBeanDefinition());
 
-                BeanDefinitionBuilder triggerBuilder =
+            BeanDefinitionBuilder triggerBuilder =
                     BeanDefinitionBuilder.genericBeanDefinition(CronTriggerFactoryBean.class);
-                JobDetail jobDetail = applicationContext.getBean(jobBeanName, JobDetail.class);
-                triggerBuilder.addPropertyValue("jobDetail", jobDetail);
-                triggerBuilder.addPropertyValue("cronExpression", m.getAnnotation(QuartzScheduled.class).cron());
-                triggerBuilder.addPropertyValue("name", mname + "Trigger");
-                triggerBuilder.addPropertyValue("group", StringUtils.capitalize(beanName) + "Trigger");
-                defaultListableBeanFactory.registerBeanDefinition(triggerBeanName, triggerBuilder.getBeanDefinition());
+            JobDetail jobDetail = applicationContext.getBean(jobBeanName, JobDetail.class);
+            triggerBuilder.addPropertyValue("jobDetail", jobDetail);
+            triggerBuilder.addPropertyValue("cronExpression", m.getAnnotation(QuartzScheduled.class).cron());
+            triggerBuilder.addPropertyValue("name", mname + "Trigger");
+            triggerBuilder.addPropertyValue("group", StringUtils.capitalize(simpleBeanName) + "Trigger");
+            defaultListableBeanFactory.registerBeanDefinition(triggerBeanName, triggerBuilder.getBeanDefinition());
 
-                triggers.add(applicationContext.getBean(triggerBeanName, Trigger.class));
-            });
+            triggers.add(applicationContext.getBean(triggerBeanName, Trigger.class));
+        });
         return bean;
     }
 
@@ -107,7 +118,7 @@ public class QuartzAnnotationBeanPostProcessor
             if (event.getApplicationContext() == this.applicationContext) {
                 if (!triggers.isEmpty()) {
                     BeanDefinitionBuilder builder =
-                        BeanDefinitionBuilder.genericBeanDefinition(SchedulerFactoryBean.class);
+                            BeanDefinitionBuilder.genericBeanDefinition(SchedulerFactoryBean.class);
                     builder.addPropertyValue("triggers", triggers.toArray());
                     builder.addPropertyValue("overwriteExistingJobs", true);
                     builder.addPropertyValue("applicationContextSchedulerContextKey", "applicationContext");

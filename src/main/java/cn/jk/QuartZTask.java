@@ -1,11 +1,10 @@
 package cn.jk;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
+import cn.jk.annotation.QuartzScheduled;
 import org.springframework.stereotype.Component;
 
-import cn.jk.annotation.QuartzScheduled;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 @Component
 public class QuartZTask {
