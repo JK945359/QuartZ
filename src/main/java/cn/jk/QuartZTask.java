@@ -2,13 +2,11 @@ package cn.jk;
 
 import cn.jk.annotation.QuartzScheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 @Component
-@Transactional
 public class QuartZTask {
 
     @QuartzScheduled(cron = "* * * * * ? ")
