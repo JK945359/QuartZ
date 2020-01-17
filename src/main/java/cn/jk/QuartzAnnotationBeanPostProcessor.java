@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.Trigger;
+import org.springframework.aop.framework.Advised;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,7 @@ import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.scheduling.quartz.CronTriggerFactoryBean;
 import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
@@ -73,15 +75,21 @@ public class QuartzAnnotationBeanPostProcessor
         // spring ioc容器中的bean是代理类，要获取自定义注解需要通道如下方式获取
         Object target = bean;
         //必须增加条件，不是所有的类都可以获取具体bean对象
-   /*     Advised advised = (Advised) bean;
-        SingletonTargetSource singletonTargetSource = (SingletonTargetSource) advised.getTargetSource();
-        target = singletonTargetSource.getTarget();*/
-        String simpleBeanName = bean.getClass().getSimpleName();
+        if (bean.getClass().getAnnotation(Transactional.class) != null) {
+            try {
+                if (bean instanceof Advised) {
+                    Advised advised = (Advised) bean;
+                    target = advised.getTargetSource().getTarget();
+                }
+            } catch (Exception e) {
+                log.error("转化获取真实类出错，{}", e.getMessage(), e);
+            }
+        }
         // 过滤没有@QuartzScheduled注解和有参数的方法
         Arrays.asList(target.getClass().getDeclaredMethods()).stream()
                 .filter(m -> m.getAnnotation(QuartzScheduled.class) != null && m.getParameterCount() == 0).forEach(m -> {
             String mname = m.getName();
-            String beanMethodName = simpleBeanName + StringUtils.capitalize(mname);
+            String beanMethodName = beanName + StringUtils.capitalize(mname);
             String jobBeanName = beanMethodName + "JobDetail";
             String triggerBeanName = beanMethodName + "Trigger";
 
@@ -94,7 +102,7 @@ public class QuartzAnnotationBeanPostProcessor
             jobDataAsMap.put("targetMethod", mname);
             jobDetailBuilder.addPropertyValue("jobDataAsMap", jobDataAsMap);
             jobDetailBuilder.addPropertyValue("name", mname + "JobDetail");
-            jobDetailBuilder.addPropertyValue("group", StringUtils.capitalize(simpleBeanName) + "JobDetail");
+            jobDetailBuilder.addPropertyValue("group", StringUtils.capitalize(beanName) + "JobDetail");
             defaultListableBeanFactory.registerBeanDefinition(jobBeanName, jobDetailBuilder.getBeanDefinition());
 
             BeanDefinitionBuilder triggerBuilder =
@@ -103,7 +111,7 @@ public class QuartzAnnotationBeanPostProcessor
             triggerBuilder.addPropertyValue("jobDetail", jobDetail);
             triggerBuilder.addPropertyValue("cronExpression", m.getAnnotation(QuartzScheduled.class).cron());
             triggerBuilder.addPropertyValue("name", mname + "Trigger");
-            triggerBuilder.addPropertyValue("group", StringUtils.capitalize(simpleBeanName) + "Trigger");
+            triggerBuilder.addPropertyValue("group", StringUtils.capitalize(beanName) + "Trigger");
             defaultListableBeanFactory.registerBeanDefinition(triggerBeanName, triggerBuilder.getBeanDefinition());
 
             triggers.add(applicationContext.getBean(triggerBeanName, Trigger.class));
